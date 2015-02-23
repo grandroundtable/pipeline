@@ -11,9 +11,16 @@ type Consumer interface {
 }
 
 // DefaultConsumer represents the default Consumer implementation in errmux.
+// With the default consumer, the first non-nil error encountered by the
+// consumer will stop all error processing.
 type DefaultConsumer struct {
 	err  error
 	done bool
+}
+
+// NewDefaultConsumer creates a new default consumer.
+func NewDefaultConsumer() *DefaultConsumer {
+	return &DefaultConsumer{}
 }
 
 // Consume sets the consumer error to the first non-nil error encountered and

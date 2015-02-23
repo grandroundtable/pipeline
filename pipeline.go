@@ -12,21 +12,19 @@ import (
 type Job interface {
 	// Close terminates the job early. Multiple calls to Close will result in
 	// undefined behavior.
-	Close()
-	// NewWorker creates a new Worker and a receive-only error channel for
-	// error values. The error channel must be closed to avoid deadlocks or
-	// leaks.
-	NewWorker() (Worker, <-chan error)
+	Close() error
+	// NewWorker creates a new Worker for the job.
+	NewWorker() Worker
 }
 
 // Worker represents the processing logic for a job.
 type Worker interface {
 	// Close terminates the worker. Multiple calls to Close will result in
 	// undefined behavior.
-	Close()
-	// Next executes the next task for the worker. If there was a task to
-	// execute, Next returns true. Otherwise, it returns false.
-	Next() bool
+	Close() error
+	// Next executes the next task for the worker. If the worker is able to
+	// continue, Next returns true. Otherwise, Next returns false.
+	Next() (bool, error)
 }
 
 // Run runs the given job with n workers, using the given consumer for error
@@ -37,44 +35,56 @@ func Run(job Job, c errmux.Consumer, n int) *errmux.Handler {
 
 	// Make n pairs of workers and error channels.
 	ws := make([]Worker, n)
-	errs := make([]<-chan error, n)
+	errOuts := make([]<-chan error, n)
+	errIns := make([]chan<- error, n)
 
 	wg.Add(n)
 	for i := 0; i < n; i++ {
-		w, e := job.NewWorker()
+		w := job.NewWorker()
 		ws[i] = w
-		errs[i] = e
+		ch := make(chan error, 1)
+		errOuts[i] = ch
+		errIns[i] = ch
 	}
 
+	jobErrs := make(chan error, 1)
+	errOuts, errIns = append(errOuts, jobErrs), append(errIns, jobErrs)
+
 	// Create a new handler with the given consumer and error channels.
-	h := errmux.NewHandler(c, errs...)
+	h := errmux.NewHandler(c, errOuts...)
 
 	// For each worker, iterate over each task until either the handler
 	// yields an error or there are no tasks left to execute.
-	for _, w := range ws {
-		go func(v Worker) {
-			defer wg.Done()
-			defer v.Close()
+	for i := range ws {
+		go func(v Worker, e chan<- error) {
+			defer func() {
+				e <- v.Close()
+				close(e)
+				wg.Done()
+			}()
 
 			ok := true
-			e := h.ErrChan()
+			ch := h.ErrChan()
 
+			var err error
 			for ok {
 				select {
-				case <-e:
+				case <-ch:
 					return
 				default:
 				}
 
-				ok = v.Next()
+				ok, err = v.Next()
+				e <- err
 			}
-		}(w)
+		}(ws[i], errIns[i])
 	}
 
 	// Wait until all workers are finished and then close the job.
 	go func() {
 		wg.Wait()
-		job.Close()
+		jobErrs <- job.Close()
+		close(jobErrs)
 	}()
 
 	return h
