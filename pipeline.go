@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/jnschaeffer/pipeline/errmux"
+	"github.com/grandroundtable/pipeline/errmux"
 )
 
 // WorkerPool represents the behavior for a pool of workers.
