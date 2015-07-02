@@ -5,8 +5,6 @@ package pipeline
 import (
 	"log"
 	"sync"
-
-	"github.com/grandroundtable/pipeline/errmux"
 )
 
 // WorkerPool represents the behavior for a pool of workers.
@@ -56,7 +54,7 @@ func (j *Job) Close() error {
 // Run runs the given job with n workers, using the given consumer for error
 // handling logic. The returned handler will process all errors from all
 // workers.
-func (j *Job) Run(c errmux.Consumer, n int) *errmux.Handler {
+func (j *Job) Run(c ErrConsumer, n int) *ErrHandler {
 	var wg sync.WaitGroup
 
 	// Make n pairs of workers and error channels.
@@ -77,7 +75,7 @@ func (j *Job) Run(c errmux.Consumer, n int) *errmux.Handler {
 	errOuts, errIns = append(errOuts, poolErrs), append(errIns, poolErrs)
 
 	// Create a new handler with the given consumer and error channels.
-	h := errmux.NewHandler(c, errOuts...)
+	h := NewErrHandler(c, errOuts...)
 
 	// Cancel the job if the handler reports an error.
 	go func() {

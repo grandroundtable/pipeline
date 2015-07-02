@@ -1,4 +1,4 @@
-package errmux
+package pipeline
 
 import (
 	"fmt"
@@ -38,7 +38,7 @@ func testRangeAll(t *testing.T) {
 
 	m := mapConsumer{}
 
-	h := NewHandler(m, errs...)
+	h := NewErrHandler(m, errs...)
 	h.Wait()
 
 	for k := range m {
@@ -61,7 +61,7 @@ func TestCancel(t *testing.T) {
 func testCancel(t *testing.T) {
 
 	ch := make(chan error, 1)
-	h := NewHandler(&DefaultConsumer{}, ch)
+	h := NewErrHandler(&DefaultConsumer{}, ch)
 	go func() {
 		ch <- nil
 		h.Cancel()
@@ -84,7 +84,7 @@ func TestMultiCancel(t *testing.T) {
 
 	ch := make(chan error)
 
-	h := NewHandler(&DefaultConsumer{}, ch)
+	h := NewErrHandler(&DefaultConsumer{}, ch)
 
 	ok1 := h.Cancel()
 	ok2 := h.Cancel()
